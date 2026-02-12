@@ -6,9 +6,24 @@ from multiprocessing import Pool
 
 BASE_LORE_URL = "https://universe.leagueoflegends.com/"
 
-POOL_SIZE = 10
+POOL_SIZE = 5
 
 LANGUAGES = ["en_US", "en_GB", "en_AU", "es_MX", "es_ES", "de_DE", "fr_FR", "it_IT", "pl_PL", "el_GR", "ro_RO", "hu_HU", "cs_CZ", "pt_BR", "ja_JP", "ru_RU", "tr_TR", "ko_KR", "vn_VN", "zh_TW", "th_TH"]
+
+def smart_scroll(driver, pause=0.5, max_attempts=20):
+    last_height = 0
+    for _ in range(max_attempts):
+        height = driver.execute_script(
+            "return document.documentElement.scrollHeight"
+        )
+        if height == last_height:
+            break
+
+        driver.execute_script(
+            "window.scrollTo(0, document.documentElement.scrollHeight);"
+        )
+        sleep(pause)
+        last_height = height
 
 def scrape_champions_names_and_lore(Lang="en_US"):
     url = BASE_LORE_URL + Lang + "/champions/"
@@ -56,8 +71,8 @@ def scrape_one_champions_lore(champ_url, Lang):
     wait = WebDriverWait(driver, 15)
 
     # scroll to trigger lazy loading
-    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-    sleep(2)
+    smart_scroll(driver, pause=1, max_attempts=10)
+    sleep(1)
     content = driver.find_element(By.ID, "CatchElement").text
     driver.quit()
     return content
