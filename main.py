@@ -38,18 +38,18 @@ def scrape_champions_names_and_lore(Lang="en_US"):
 
     for i in range(0, len(champions_content), POOL_SIZE):
         with Pool(POOL_SIZE) as p: 
-            results = p.map(scrape_one_champions_lore, [champion["query_name"] for champion in champions_content[i:i+POOL_SIZE]])
+            results = p.starmap(scrape_one_champions_lore, [(champion["champ_url"], Lang) for champion in champions_content[i:i+POOL_SIZE]])
             for j in range(len(results)):
                 champions_content[i+j]["lore"] = results[j]
 
-    with open(f"data/Lore{Lang}.json", "w", encoding="utf-8") as f:
+    with open(f"data/Lore_{Lang}.json", "w", encoding="utf-8") as f:
         import json
         json.dump(champions_content, f, indent=4, ensure_ascii=False)
     driver.quit()
 
 
-def scrape_one_champions_lore(name, Lang="fr_FR"):
-    url = BASE_LORE_URL + Lang + "/story/champion/" + name.lower() + "/"
+def scrape_one_champions_lore(champ_url, Lang):
+    url = champ_url.replace("champion", "story/champion")
     driver = selenium.webdriver.Chrome()
     driver.get(url)
 
