@@ -1,8 +1,12 @@
-import selenium.webdriver
+
+from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from time import sleep
 from multiprocessing import Pool
+from os import path
+import json
+
 
 BASE_LORE_URL = "https://universe.leagueoflegends.com/"
 
@@ -25,19 +29,37 @@ def smart_scroll(driver, pause=0.5, max_attempts=20):
         sleep(pause)
         last_height = height
 
-def scrape_champions_names_and_lore(Lang="en_US"):
+def load_saved_champions_with_lore_data(Lang) -> dict:
+    if path.isfile(f"data/Lore_{Lang}.json"):
+        with open(f"data/Lore_{Lang}.json", "r", encoding="utf-8") as file:
+            content = file.read()
+            champions_saved = json.loads(content)
+            filtered_champions_saved = [champion for champion  in champions_saved.values() if "lore" in champion.keys() and len(champion["lore"]) > 0]
+            champions_saved = {}
+            for champ in filtered_champions_saved:
+                champions_saved[champ["name"]] = champ
+            return champions_saved
+    return {}
+
+def scrape_champions_names_and_lore(Lang):
     url = BASE_LORE_URL + Lang + "/champions/"
-    driver = selenium.webdriver.Chrome()
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless=new")
+
+    driver = webdriver.Chrome(options=options)
     driver.get(url)
 
     wait = WebDriverWait(driver, 15)
 
     # scroll to trigger lazy loading
     driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-    sleep(2)
+    sleep(3)
+    
+    print(f"Loading {Lang} champions names and lore...")
+    saved_champions_content = load_saved_champions_with_lore_data(Lang)
+    champions_content = {}
 
-    champions_content = []
-
+    print(f"Scraping {Lang} champions names and lore...")
     champions_row = driver.find_elements(By.CLASS_NAME, "champsListUl_2Lmb")
     for row in champions_row:
         champions = row.find_elements(By.TAG_NAME, "li")
@@ -48,24 +70,32 @@ def scrape_champions_names_and_lore(Lang="en_US"):
             name = name[0].upper() + name[1:]
             region = champ.text.split("\n")[1].lower()
             region = region[0].upper() + region[1:]
-            champion = { "name": name, "region": region, "image_url": champ_image, "champ_url": champ_url}
-            champions_content.append(champion)
+            champion = { "name": name, "region": region, "image_url": champ_image, "champ_url": champ_url, "lore": ""}
+            champions_content[name] = champion
+    
+    filtered_champions_content = [champion for champion in champions_content.values() if champion["name"] not in saved_champions_content.keys()]
 
-    for i in range(0, len(champions_content), POOL_SIZE):
+    for i in range(0, len(filtered_champions_content), POOL_SIZE):
         with Pool(POOL_SIZE) as p: 
-            results = p.starmap(scrape_one_champions_lore, [(champion["champ_url"], Lang) for champion in champions_content[i:i+POOL_SIZE]])
+            results = p.starmap(scrape_one_champions_lore, [(champion["champ_url"], champion["name"], Lang) for champion in filtered_champions_content[i:i+POOL_SIZE]])
             for j in range(len(results)):
-                champions_content[i+j]["lore"] = results[j]
+                champions_content[results[j][0]]["lore"] = results[j][1]
+    for champ_name in champions_content:
+        if champ_name in saved_champions_content.keys():
+            champions_content[champ_name]["lore"] = saved_champions_content[champ_name]["lore"]
 
     with open(f"data/Lore_{Lang}.json", "w", encoding="utf-8") as f:
-        import json
         json.dump(champions_content, f, indent=4, ensure_ascii=False)
+    print(f"{Lang} champions lore scraped and saved successfully.")
     driver.quit()
 
 
-def scrape_one_champions_lore(champ_url, Lang):
+def scrape_one_champions_lore(champ_url, champ_name, Lang) -> tuple:
     url = champ_url.replace("champion", "story/champion")
-    driver = selenium.webdriver.Chrome()
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless=new")
+
+    driver = webdriver.Chrome(options=options)
     driver.get(url)
 
     wait = WebDriverWait(driver, 15)
@@ -75,7 +105,7 @@ def scrape_one_champions_lore(champ_url, Lang):
     sleep(1)
     content = driver.find_element(By.ID, "CatchElement").text
     driver.quit()
-    return content
+    return (champ_name, content)
 
 if __name__ == "__main__":
     for lang in LANGUAGES:
