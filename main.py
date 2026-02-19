@@ -6,6 +6,7 @@ from time import sleep
 from multiprocessing import Pool
 from os import path
 import json
+import argparse
 
 
 BASE_LORE_URL = "https://universe.leagueoflegends.com/"
@@ -108,5 +109,13 @@ def scrape_one_champions_lore(champ_url, champ_name, Lang) -> tuple:
     return (champ_name, content)
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Scrape League of Legends champions lore in different languages.")
+    parser.add_argument("--languages", nargs="+", help="List of languages to scrape (e.g., en_US es_ES de_DE). If not provided, all languages will be scraped.")
+    parser.add_argument("--pool-size", type=int, default=POOL_SIZE, help="Number of parallel processes to use for scraping champion lore. Default is 5.")
+    args = parser.parse_args()
+    if args.pool_size:
+        POOL_SIZE = args.pool_size
+    if args.languages:
+        LANGUAGES = args.languages
     for lang in LANGUAGES:
-        scrape_champions_names_and_lore(lang)
+        scrape_champions_names_and_lore(lang)   
